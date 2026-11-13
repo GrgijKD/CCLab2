@@ -70,7 +70,7 @@ if st.button("Analyze"):
 
                 prompt = f"""
                 Analyze this receipt image. 
-                Extract the merchant name and all purchased line items with their original prices and discounts.
+                Extract the merchant name and all purchased line items with their unit price, quantity, and total price for the line.
                 Translate item descriptions into {lang}. Do not translate merchant name.
 
                 Return ONLY a JSON object (without markdown codeblocks like ```json) with the following structure:
@@ -79,13 +79,13 @@ if st.button("Analyze"):
                   "items": [
                     {{
                       "Item": "Translated item description",
-                      "Old Price": float,
-                      "Discount": float,
-                      "Price": float
+                      "Price": float,
+                      "Quantity": float,
+                      "Total": float
                     }}
                   ]
                 }}
-                Note: "Old Price" is price before discount, "Discount" is discount amount, "Price" is final price paid for item. If no discount, Discount is 0.0 and Old Price equals Price.
+                Note: "Price" is the price for a single unit/item, "Quantity" is the quantity or weight purchased (default to 1 if not specified on the receipt), and "Total" is the total price paid for this line item (Price * Quantity).
                 """
 
                 response = client.models.generate_content(
@@ -114,29 +114,37 @@ if st.session_state.analyzed_data:
     
     df = pd.DataFrame(st.session_state.analyzed_data)
     
-    cols = ["Item", "Old Price", "Discount", "Price"]
+    cols = ["Item", "Price", "Quantity", "Total"]
     df = df.reindex(columns=[c for c in cols if c in df.columns])
     
-    total_old = df["Old Price"].sum() if "Old Price" in df.columns else 0.0
-    total_discount = df["Discount"].sum() if "Discount" in df.columns else 0.0
-    total_final = df["Price"].sum() if "Price" in df.columns else 0.0
+    total_quantity = df["Quantity"].sum() if "Quantity" in df.columns else 0
+    total_sum = df["Total"].sum() if "Total" in df.columns else 0.0
     
     if st.session_state.view_mode == 'table':
-        sum_row = pd.DataFrame([{"Item": "TOTAL", "Old Price": total_old, "Discount": total_discount, "Price": total_final}])
+        sum_row = pd.DataFrame([{
+            "Item": "TOTAL", 
+            "Price": None, 
+            "Quantity": total_quantity, 
+            "Total": total_sum
+        }])
         df_display = pd.concat([df, sum_row], ignore_index=True)
         st.dataframe(df_display, use_container_width=True)
     else:
         text_output = f"{st.session_state.merchant_name}\n"
         for _, row in df.iterrows():
-            if row.get("Discount", 0) > 0:
-                text_output += f"{row['Item']} {row['Old Price']:.2f} -{row['Discount']:.2f} {row['Price']:.2f}\n"
+            price = row.get("Price", 0.0)
+            quantity = row.get("Quantity", 1)
+            total = row.get("Total", 0.0)
+            
+            quantity_str = f"{int(quantity)}" if float(quantity).is_integer() else f"{quantity}"
+            
+            if quantity != 1:
+                text_output += f"{row['Item']} — {price:.2f} x {quantity_str} = {total:.2f}\n"
             else:
-                text_output += f"{row['Item']} {row['Price']:.2f}\n"
+                text_output += f"{row['Item']} — {total:.2f}\n"
         
-        text_output += f"TOTAL "
-        if total_discount > 0:
-            text_output += f"{total_old:.2f} -{total_discount:.2f} "
-        text_output += f"{total_final:.2f}"
+        total_quantity_str = f"{int(total_quantity)}" if float(total_quantity).is_integer() else f"{total_quantity}"
+        text_output += f"\nTOTAL ({total_quantity_str} items): {total_sum:.2f}"
         
         st.code(text_output, language="text")
 
