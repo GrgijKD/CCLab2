@@ -85,7 +85,7 @@ if st.button("Analyze"):
                     {{
                       "Item": "Translated item description",
                       "Price": float,
-                      "Count": float,
+                      "Quantity": float,
                       "Total": float
                     }}
                   ]
@@ -139,7 +139,7 @@ if st.session_state.analyzed_data:
             "Total": total_sum
         }])
         df_display = pd.concat([df, sum_row], ignore_index=True)
-        st.dataframe(df_display, use_container_width=True)
+        st.dataframe(df_display, width='stretch')
     else:
         text_output = f"{st.session_state.merchant_name}\n"
         for _, row in df.iterrows():
