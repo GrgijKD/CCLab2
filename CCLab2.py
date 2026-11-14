@@ -69,18 +69,23 @@ if st.button("Analyze"):
                 image = Image.open(uploaded_file)
 
                 prompt = f"""
-                Analyze this receipt image. 
+                Analyze this image. First, determine if it is a valid receipt, bill, or invoice.
+                If it is NOT a receipt (random text or photo), set "is_receipt" to false, leave "merchant_name" empty, "items" empty.
+                
+                If it IS a valid receipt:
+                Set "is_receipt" to true.
                 Extract the merchant name and all purchased line items with their unit price, quantity, and total price for the line.
                 Translate item descriptions into {lang}. Do not translate merchant name.
 
                 Return ONLY a JSON object (without markdown codeblocks like ```json) with the following structure:
                 {{
+                  "is_receipt": boolean,
                   "merchant_name": "String",
                   "items": [
                     {{
                       "Item": "Translated item description",
                       "Price": float,
-                      "Quantity": float,
+                      "Count": float,
                       "Total": float
                     }}
                   ]
@@ -99,9 +104,15 @@ if st.button("Analyze"):
                 import json
                 result = json.loads(response.text)
 
-                st.session_state.merchant_name = result.get("merchant_name", "Unknown Merchant")
-                st.session_state.analyzed_data = result.get("items", [])
-                st.rerun()
+                if not result.get("is_receipt", False):
+                    st.session_state.analyzed_data = None
+                    st.session_state.merchant_name = ""
+                    err_msg = "Receipt not recognized."
+                    st.error(err_msg)
+                else:
+                    st.session_state.merchant_name = result.get("merchant_name", "Unknown Merchant")
+                    st.session_state.analyzed_data = result.get("items", [])
+                    st.rerun()
 
             except Exception as e:
                 st.error(f"Error processing receipt: {e}")
